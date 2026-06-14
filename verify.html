@@ -108,6 +108,16 @@
       </button>
       <div id="reader" style="margin-top:12px"></div>
 
+      <!-- مسح من صورة -->
+      <div style="margin-top:12px">
+        <input type="file" id="qr-image" accept="image/*" style="display:none" onchange="scanFromImage(event)">
+        <button class="btn btn-gray" onclick="document.getElementById('qr-image').click()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+          أو اختر صورة الباركود من المعرض
+        </button>
+        <div class="status-line" id="img-status"></div>
+      </div>
+
       <div style="margin-top:14px">
         <div class="section-title">أو أدخل الكود يدوياً</div>
         <input type="text" id="manual-code" class="manual-input" placeholder="PCVXXXXXXXXXXXX" oninput="formatCodeInput(this)" maxlength="19">
@@ -257,6 +267,31 @@ function showResult(card, state) {
   }
   // اهتزاز للتنبيه
   if (navigator.vibrate) navigator.vibrate(state==='valid'?80:[60,40,60]);
+}
+
+// مسح الباركود من صورة مختارة من المعرض
+async function scanFromImage(ev) {
+  const file = ev.target.files[0];
+  if (!file) return;
+  const statusEl = document.getElementById('img-status');
+  statusEl.textContent = 'جاري قراءة الصورة...';
+
+  if (scanning) { try { await scanner.stop(); scanner.clear(); scanning = false; } catch(e){} }
+
+  const tmp = new Html5Qrcode('reader');
+  try {
+    const decoded = await tmp.scanFile(file, false);
+    statusEl.innerHTML = '<span class="status-ok">✓ تم قراءة الكود من الصورة</span>';
+    const input = document.getElementById('manual-code');
+    input.value = decoded;
+    formatCodeInput(input);
+    lookupCode(decoded);
+  } catch (err) {
+    statusEl.innerHTML = '<span style="color:#dc2626">تعذّر قراءة باركود من الصورة. تأكد أن الصورة واضحة وتحتوي الباركود كاملاً.</span>';
+  } finally {
+    try { tmp.clear(); } catch(e){}
+    ev.target.value = '';
+  }
 }
 
 // تنسيق تلقائي: إضافة شرطة بعد كل 4 أحرف/أرقام
