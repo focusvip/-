@@ -56,7 +56,7 @@
   .status-line { font-size:13px; color:#6b7280; text-align:center; margin-top:8px; }
   .status-ok { color:#0d5c35; font-weight:700; }
   #reader { width:100%; border-radius:12px; overflow:hidden; }
-  #reader:empty { display:none; }
+  #reader video { width:100% !important; border-radius:12px; }
   .manual-input {
     width:100%; padding:13px; border:1.5px solid #d1d5db; border-radius:10px;
     font-family:monospace; font-size:15px; text-align:center; letter-spacing:1px;
@@ -285,36 +285,32 @@ async function startScan() {
   const btn = document.getElementById('scan-btn');
   const statusEl = document.getElementById('db-status');
 
-  // التحقق من دعم الكاميرا
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
     showCameraError('المتصفح لا يدعم الكاميرا، أو الصفحة مفتوحة بدون HTTPS. افتح الرابط عبر https:// وليس كملف محلي.');
     return;
   }
 
-  // طلب إذن الكاميرا أولاً بشكل صريح
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-    // أوقف هذا التدفق المؤقت (سيعيد html5-qrcode فتحه)
-    stream.getTracks().forEach(t => t.stop());
-  } catch (err) {
-    if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-      showCameraError('تم رفض إذن الكاميرا. اذهب لإعدادات المتصفح واسمح بالوصول للكاميرا لهذا الموقع ثم أعد المحاولة.');
-    } else if (err.name === 'NotFoundError') {
-      showCameraError('لم يتم العثور على كاميرا في الجهاز.');
-    } else if (err.name === 'NotReadableError') {
-      showCameraError('الكاميرا مستخدمة من تطبيق آخر. أغلق التطبيقات الأخرى وأعد المحاولة.');
-    } else {
-      showCameraError('تعذّر فتح الكاميرا: ' + (err.message || err.name));
-    }
-    return;
-  }
+  // مسح أي رسالة خطأ سابقة
+  document.getElementById('result-area').innerHTML = '';
 
   // بدء الماسح
+  document.getElementById('reader').style.minHeight = '260px';
   scanner = new Html5Qrcode('reader');
+
+  const config = {
+    fps: 10,
+    qrbox: (vw, vh) => {
+      const m = Math.min(vw, vh);
+      const size = Math.floor(m * 0.7);
+      return { width: size, height: size };
+    },
+    aspectRatio: 1.0
+  };
+
   try {
     await scanner.start(
       { facingMode: 'environment' },
-      { fps: 10, qrbox: { width: 220, height: 220 } },
+      config,
       (decodedText) => {
         lookupCode(decodedText);
         stopScan();
@@ -324,9 +320,34 @@ async function startScan() {
     scanning = true;
     btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="6" width="12" height="12" rx="1"/></svg> إيقاف المسح';
     btn.classList.remove('btn-green'); btn.classList.add('btn-gray');
-    statusEl.textContent = statusEl.textContent; // إبقاء حالة الملف
   } catch (err) {
-    showCameraError('تعذّر تشغيل الماسح: ' + (err.message || err));
+    // محاولة ثانية بأي كاميرا متاحة
+    try {
+      await scanner.start(
+        { facingMode: 'user' },
+        config,
+        (decodedText) => { lookupCode(decodedText); stopScan(); },
+        () => {}
+      );
+      scanning = true;
+      btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="6" width="12" height="12" rx="1"/></svg> إيقاف المسح';
+      btn.classList.remove('btn-green'); btn.classList.add('btn-gray');
+    } catch (err2) {
+      const e = err2.name || '';
+      if (e === 'NotAllowedError' || e === 'PermissionDeniedError' || String(err2).includes('Permission')) {
+        showCameraError('تم رفض إذن الكاميرا. اضغط على علامة القفل/المعلومات بجانب الرابط ← أذونات الموقع ← الكاميرا ← السماح، ثم أعد تحميل الصفحة.');
+      } else if (e === 'NotFoundError') {
+        showCameraError('لم يتم العثور على كاميرا في الجهاز.');
+      } else if (e === 'NotReadableError') {
+        showCameraError('الكاميرا مستخدمة من تطبيق آخر. أغلق التطبيقات الأخرى وأعد المحاولة.');
+      } else {
+        showCameraError('تعذّر تشغيل الماسح: ' + (err2.message || err2));
+      }
+      // إعادة الزر لحالته
+      btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7V5a2 2 0 012-2h2M17 3h2a2 2 0 012 2v2M21 17v2a2 2 0 01-2 2h-2M7 21H5a2 2 0 01-2-2v-2"/><line x1="3" y1="12" x2="21" y2="12"/></svg> ابدأ المسح بالكاميرا';
+      btn.classList.remove('btn-gray'); btn.classList.add('btn-green');
+      document.getElementById('reader').style.minHeight = '0';
+    }
   }
 }
 
@@ -345,6 +366,7 @@ function stopScan() {
     scanner.stop().then(() => {
       scanner.clear();
       scanning = false;
+      document.getElementById('reader').style.minHeight = '0';
       const btn = document.getElementById('scan-btn');
       btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7V5a2 2 0 012-2h2M17 3h2a2 2 0 012 2v2M21 17v2a2 2 0 01-2 2h-2M7 21H5a2 2 0 01-2-2v-2"/><line x1="3" y1="12" x2="21" y2="12"/></svg> ابدأ المسح بالكاميرا';
       btn.classList.remove('btn-gray'); btn.classList.add('btn-green');
