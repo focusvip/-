@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>التحقق من بطاقة الأولوية</title>
+<script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body {
+    font-family:'Segoe UI', Tahoma, sans-serif;
+    background:#f0f4f2;
+    color:#111827;
+    min-height:100vh;
+    padding:0 0 30px;
+  }
+  .topbar {
+    background:#1a7a4a;
+    color:#fff;
+    padding:16px 18px;
+    display:flex;
+    align-items:center;
+    gap:10px;
+    position:sticky;
+    top:0;
+    z-index:10;
+  }
+  .topbar svg { width:26px; height:26px; }
+  .topbar h1 { font-size:17px; font-weight:800; }
+  .wrap { max-width:480px; margin:0 auto; padding:16px; }
+  .card {
+    background:#fff;
+    border-radius:14px;
+    box-shadow:0 2px 12px rgba(0,0,0,.08);
+    padding:18px;
+    margin-bottom:16px;
+  }
+  .load-row { display:flex; flex-direction:column; gap:10px; }
+  .btn {
+    border:none;
+    border-radius:10px;
+    padding:14px;
+    font-size:15px;
+    font-weight:700;
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:8px;
+    font-family:inherit;
+  }
+  .btn svg { width:20px; height:20px; }
+  .btn-green { background:#1a7a4a; color:#fff; }
+  .btn-gray  { background:#e5e7eb; color:#374151; }
+  .btn-blue  { background:#2563eb; color:#fff; }
+  .status-line { font-size:13px; color:#6b7280; text-align:center; margin-top:8px; }
+  .status-ok { color:#0d5c35; font-weight:700; }
+  #reader { width:100%; border-radius:12px; overflow:hidden; }
+  #reader:empty { display:none; }
+  .manual-input {
+    width:100%; padding:13px; border:1.5px solid #d1d5db; border-radius:10px;
+    font-family:monospace; font-size:15px; text-align:center; letter-spacing:1px;
+    direction:ltr; text-transform:uppercase; margin-bottom:10px;
+  }
+  .result { border-radius:12px; padding:18px; margin-top:4px; }
+  .result.valid { background:#e8f5ee; border:2px solid #1a7a4a; }
+  .result.invalid { background:#fee2e2; border:2px solid #dc2626; }
+  .result-head { display:flex; align-items:center; gap:10px; justify-content:center; margin-bottom:14px; }
+  .result-head svg { width:30px; height:30px; }
+  .result.valid .result-head { color:#0d5c35; }
+  .result.invalid .result-head { color:#991b1b; }
+  .result-head span { font-size:18px; font-weight:800; }
+  .row { display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid #c5e6d2; font-size:14px; }
+  .row:last-child { border-bottom:none; }
+  .row .lbl { color:#6b7280; }
+  .row .val { font-weight:700; }
+  .hint { font-size:12px; color:#9ca3af; text-align:center; margin-top:14px; line-height:1.6; }
+  .section-title { font-size:14px; font-weight:700; color:#374151; margin-bottom:10px; }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>
+    <h1>التحقق من بطاقة الأولوية</h1>
+  </div>
+
+  <div class="wrap">
+    <!-- تحميل قاعدة الأكواد -->
+    <div class="card">
+      <div class="section-title">١. تحميل ملف الأكواد</div>
+      <div class="load-row">
+        <input type="file" id="db-file" accept=".json,.txt" style="display:none" onchange="loadDB(event)">
+        <button class="btn btn-gray" onclick="document.getElementById('db-file').click()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          اختر ملف الأكواد (JSON أو TXT)
+        </button>
+        <div class="status-line" id="db-status">لم يتم تحميل ملف بعد</div>
+      </div>
+    </div>
+
+    <!-- المسح -->
+    <div class="card">
+      <div class="section-title">٢. مسح الباركود</div>
+      <div id="https-warn" style="display:none;background:#fef3c7;border:1px solid #fbbf24;border-radius:8px;padding:10px;font-size:12px;color:#92400e;margin-bottom:10px;line-height:1.6"></div>
+      <button class="btn btn-green" id="scan-btn" onclick="toggleScan()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7V5a2 2 0 012-2h2M17 3h2a2 2 0 012 2v2M21 17v2a2 2 0 01-2 2h-2M7 21H5a2 2 0 01-2-2v-2"/><line x1="3" y1="12" x2="21" y2="12"/></svg>
+        ابدأ المسح بالكاميرا
+      </button>
+      <div id="reader" style="margin-top:12px"></div>
+
+      <div style="margin-top:14px">
+        <div class="section-title">أو أدخل الكود يدوياً</div>
+        <input type="text" id="manual-code" class="manual-input" placeholder="PCVXXXXXXXXXXXX" oninput="formatCodeInput(this)" maxlength="19">
+        <button class="btn btn-blue" onclick="checkManual()">تحقق</button>
+      </div>
+    </div>
+
+    <!-- النتيجة -->
+    <div id="result-area"></div>
+
+    <div class="hint">
+      حمّل ملف الأكواد المُصدّر من النظام مرة واحدة، ثم امسح أي بطاقة للتحقق.<br>
+      يعمل بدون إنترنت بعد تحميل الصفحة والملف.
+    </div>
+  </div>
+
+<script>
+let DB = null;          // قاعدة الأكواد
+let scanner = null;     // كائن الماسح
+let scanning = false;
+
+// فحص بيئة التشغيل عند فتح الصفحة
+(function checkEnvironment(){
+  const warn = document.getElementById('https-warn');
+  const isSecure = window.isSecureContext ||
+                   location.protocol === 'https:' ||
+                   location.hostname === 'localhost' ||
+                   location.hostname === '127.0.0.1';
+  if (!isSecure) {
+    warn.style.display = 'block';
+    warn.innerHTML = '⚠️ لتشغيل الكاميرا يجب فتح هذه الصفحة عبر رابط <strong>https://</strong> (مثل GitHub Pages)، وليس كملف محفوظ على الجهاز. الإدخال اليدوي للكود يعمل في كل الحالات.';
+  }
+})();
+
+// توحيد الأحرف الملتبسة (مطابق للنظام الرئيسي)
+function normalizeCode(str) {
+  return (str||'').toUpperCase()
+    .replace(/[OQ]/g,'0')
+    .replace(/[IL]/g,'1')
+    .replace(/\s+/g,'')
+    .replace(/[^A-Z0-9-]/g,'');
+}
+
+function loadDB(ev) {
+  const file = ev.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    let text = e.target.result;
+    // إزالة BOM إن وُجد
+    if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+
+    const trimmed = text.trim();
+    let cards = [];
+    let facility = '';
+
+    // كشف تلقائي: JSON أم TXT
+    if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+      // ملف JSON
+      try {
+        const data = JSON.parse(trimmed);
+        if (data.type !== 'priority-card-verify-db' || !Array.isArray(data.cards)) {
+          document.getElementById('db-status').textContent = 'ملف JSON غير صالح';
+          return;
+        }
+        cards = data.cards;
+        facility = data.facility || '';
+      } catch(err) {
+        document.getElementById('db-status').textContent = 'تعذّر قراءة ملف JSON';
+        return;
+      }
+    } else {
+      // ملف TXT — كل سطر: code,name,nationalId,cardType,fileNo,issueDate,expiryDate
+      const lines = trimmed.split(/\r?\n/);
+      for (const line of lines) {
+        const l = line.trim();
+        if (!l || l.startsWith('#')) {           // تجاهل الأسطر الفارغة والتعليقات
+          if (l.startsWith('#') && l.includes('|')) {
+            const parts = l.split('|');
+            if (parts[1]) facility = parts[1].trim();
+          }
+          continue;
+        }
+        const f = l.split(',');
+        cards.push({
+          code:       (f[0]||'').trim(),
+          name:       (f[1]||'').trim(),
+          nationalId: (f[2]||'').trim(),
+          cardType:   (f[3]||'').trim(),
+          fileNo:     (f[4]||'').trim(),
+          issueDate:  (f[5]||'').trim(),
+          expiryDate: (f[6]||'').trim()
+        });
+      }
+      if (cards.length === 0) {
+        document.getElementById('db-status').textContent = 'الملف لا يحتوي أكواد صالحة';
+        return;
+      }
+    }
+
+    DB = { cards, facility, count: cards.length };
+    document.getElementById('db-status').innerHTML =
+      `<span class="status-ok">✓ تم تحميل ${cards.length} بطاقة</span>${facility ? ' — ' + facility : ''}`;
+  };
+  reader.readAsText(file, 'UTF-8');
+}
+
+function lookupCode(code) {
+  if (!DB) {
+    showResult(null, 'no-db');
+    return;
+  }
+  const clean = normalizeCode(code);
+  const found = DB.cards.find(c => normalizeCode(c.code) === clean);
+  showResult(found || null, found ? 'valid' : 'invalid');
+}
+
+function showResult(card, state) {
+  const area = document.getElementById('result-area');
+  if (state === 'no-db') {
+    area.innerHTML = `<div class="result invalid"><div class="result-head">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      <span>حمّل ملف الأكواد أولاً</span></div></div>`;
+    return;
+  }
+  if (state === 'valid') {
+    area.innerHTML = `<div class="result valid">
+      <div class="result-head">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><polyline points="8 12 11 15 16 9"/></svg>
+        <span>بطاقة صحيحة وموثّقة ✓</span>
+      </div>
+      <div class="row"><span class="lbl">الاسم</span><span class="val">${card.name}</span></div>
+      <div class="row"><span class="lbl">السجل المدني</span><span class="val">${card.nationalId}</span></div>
+      <div class="row"><span class="lbl">نوع البطاقة</span><span class="val" style="color:#0d5c35">${card.cardType}</span></div>
+      <div class="row"><span class="lbl">رقم الملف</span><span class="val">${card.fileNo||'—'}</span></div>
+      <div class="row"><span class="lbl">تاريخ الإصدار</span><span class="val">${card.issueDate||'—'}</span></div>
+      ${card.expiryDate ? `<div class="row"><span class="lbl">تاريخ الانتهاء</span><span class="val">${card.expiryDate}</span></div>` : ''}
+    </div>`;
+  } else {
+    area.innerHTML = `<div class="result invalid">
+      <div class="result-head">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+        <span>كود غير صحيح</span>
+      </div>
+      <div style="text-align:center;color:#b91c1c;font-size:13px">البطاقة غير موجودة أو الكود مزوّر</div>
+    </div>`;
+  }
+  // اهتزاز للتنبيه
+  if (navigator.vibrate) navigator.vibrate(state==='valid'?80:[60,40,60]);
+}
+
+// تنسيق تلقائي: إضافة شرطة بعد كل 4 أحرف/أرقام
+function formatCodeInput(el) {
+  let raw = el.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  // تقسيم إلى مجموعات من 4
+  let parts = [];
+  for (let i = 0; i < raw.length; i += 4) {
+    parts.push(raw.slice(i, i + 4));
+  }
+  el.value = parts.join('-');
+}
+
+function checkManual() {
+  const code = document.getElementById('manual-code').value;
+  if (!code.trim()) return;
+  lookupCode(code);
+}
+
+async function toggleScan() {
+  if (scanning) { stopScan(); return; }
+  await startScan();
+}
+
+async function startScan() {
+  const btn = document.getElementById('scan-btn');
+  const statusEl = document.getElementById('db-status');
+
+  // التحقق من دعم الكاميرا
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    showCameraError('المتصفح لا يدعم الكاميرا، أو الصفحة مفتوحة بدون HTTPS. افتح الرابط عبر https:// وليس كملف محلي.');
+    return;
+  }
+
+  // طلب إذن الكاميرا أولاً بشكل صريح
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+    // أوقف هذا التدفق المؤقت (سيعيد html5-qrcode فتحه)
+    stream.getTracks().forEach(t => t.stop());
+  } catch (err) {
+    if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+      showCameraError('تم رفض إذن الكاميرا. اذهب لإعدادات المتصفح واسمح بالوصول للكاميرا لهذا الموقع ثم أعد المحاولة.');
+    } else if (err.name === 'NotFoundError') {
+      showCameraError('لم يتم العثور على كاميرا في الجهاز.');
+    } else if (err.name === 'NotReadableError') {
+      showCameraError('الكاميرا مستخدمة من تطبيق آخر. أغلق التطبيقات الأخرى وأعد المحاولة.');
+    } else {
+      showCameraError('تعذّر فتح الكاميرا: ' + (err.message || err.name));
+    }
+    return;
+  }
+
+  // بدء الماسح
+  scanner = new Html5Qrcode('reader');
+  try {
+    await scanner.start(
+      { facingMode: 'environment' },
+      { fps: 10, qrbox: { width: 220, height: 220 } },
+      (decodedText) => {
+        lookupCode(decodedText);
+        stopScan();
+      },
+      () => {}
+    );
+    scanning = true;
+    btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="6" width="12" height="12" rx="1"/></svg> إيقاف المسح';
+    btn.classList.remove('btn-green'); btn.classList.add('btn-gray');
+    statusEl.textContent = statusEl.textContent; // إبقاء حالة الملف
+  } catch (err) {
+    showCameraError('تعذّر تشغيل الماسح: ' + (err.message || err));
+  }
+}
+
+function showCameraError(msg) {
+  const area = document.getElementById('result-area');
+  area.innerHTML = `<div class="result invalid"><div class="result-head">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+    <span style="font-size:15px">تعذّر فتح الكاميرا</span></div>
+    <div style="text-align:center;color:#b91c1c;font-size:13px;line-height:1.7">${msg}</div>
+    <div style="text-align:center;color:#6b7280;font-size:12px;margin-top:10px">يمكنك استخدام الإدخال اليدوي للكود بدلاً من المسح.</div>
+  </div>`;
+}
+
+function stopScan() {
+  if (scanner && scanning) {
+    scanner.stop().then(() => {
+      scanner.clear();
+      scanning = false;
+      const btn = document.getElementById('scan-btn');
+      btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7V5a2 2 0 012-2h2M17 3h2a2 2 0 012 2v2M21 17v2a2 2 0 01-2 2h-2M7 21H5a2 2 0 01-2-2v-2"/><line x1="3" y1="12" x2="21" y2="12"/></svg> ابدأ المسح بالكاميرا';
+      btn.classList.remove('btn-gray'); btn.classList.add('btn-green');
+    }).catch(()=>{});
+  }
+}
+</script>
+</body>
+</html>
