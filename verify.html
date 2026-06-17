@@ -62,7 +62,7 @@
     font-family:monospace; font-size:15px; text-align:center; letter-spacing:1px;
     direction:ltr; text-transform:uppercase; margin-bottom:10px;
   }
-  .result { border-radius:12px; padding:18px; margin-top:4px; }
+  .result { border-radius:12px; padding:18px; margin-top:4px; direction:rtl; }
   .result.valid { background:#e8f5ee; border:2px solid #1a7a4a; }
   .result.invalid { background:#fee2e2; border:2px solid #dc2626; }
   .result-head { display:flex; align-items:center; gap:10px; justify-content:center; margin-bottom:14px; }
@@ -70,10 +70,10 @@
   .result.valid .result-head { color:#0d5c35; }
   .result.invalid .result-head { color:#991b1b; }
   .result-head span { font-size:18px; font-weight:800; }
-  .row { display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid #c5e6d2; font-size:14px; }
+  .row { display:flex; align-items:baseline; gap:14px; padding:7px 0; border-bottom:1px solid #c5e6d2; font-size:14px; text-align:right; }
   .row:last-child { border-bottom:none; }
-  .row .lbl { color:#6b7280; }
-  .row .val { font-weight:700; }
+  .row .lbl { color:#6b7280; min-width:90px; }
+  .row .val { font-weight:700; font-size:15px; }
   .hint { font-size:12px; color:#9ca3af; text-align:center; margin-top:14px; line-height:1.6; }
   .section-title { font-size:14px; font-weight:700; color:#374151; margin-bottom:10px; }
 </style>
@@ -95,6 +95,7 @@
           اختر ملف الأكواد (JSON أو TXT)
         </button>
         <div class="status-line" id="db-status">لم يتم تحميل ملف بعد</div>
+        <div style="font-size:11px;color:#9ca3af;text-align:center;line-height:1.6">يُحمّل مرة واحدة فقط ويُحفظ تلقائياً. أعد تحميله فقط عند إصدار بطاقات جديدة.</div>
       </div>
     </div>
 
@@ -151,6 +152,11 @@ let scanning = false;
     warn.innerHTML = '⚠️ لتشغيل الكاميرا يجب فتح هذه الصفحة عبر رابط <strong>https://</strong> (مثل GitHub Pages)، وليس كملف محفوظ على الجهاز. الإدخال اليدوي للكود يعمل في كل الحالات.';
   }
 })();
+
+// تحميل قاعدة الأكواد المحفوظة من الجلسة السابقة
+window.addEventListener('DOMContentLoaded', loadSavedDB);
+// في حال كان DOM جاهزاً فعلاً
+if (document.readyState !== 'loading') setTimeout(loadSavedDB, 0);
 
 // توحيد الأحرف الملتبسة (مطابق للنظام الرئيسي)
 function normalizeCode(str) {
@@ -219,10 +225,29 @@ function loadDB(ev) {
     }
 
     DB = { cards, facility, count: cards.length };
+    // حفظ الملف في ذاكرة المتصفح للجلسات القادمة
+    try {
+      localStorage.setItem('verifyDB', JSON.stringify(DB));
+      localStorage.setItem('verifyDB_date', new Date().toLocaleString('ar-SA'));
+    } catch(e) {}
     document.getElementById('db-status').innerHTML =
       `<span class="status-ok">✓ تم تحميل ${cards.length} بطاقة</span>${facility ? ' — ' + facility : ''}`;
   };
   reader.readAsText(file, 'UTF-8');
+}
+
+// تحميل الملف المحفوظ تلقائياً عند فتح الصفحة
+function loadSavedDB() {
+  try {
+    const saved = localStorage.getItem('verifyDB');
+    if (saved) {
+      DB = JSON.parse(saved);
+      const savedDate = localStorage.getItem('verifyDB_date') || '';
+      document.getElementById('db-status').innerHTML =
+        `<span class="status-ok">✓ ${DB.count} بطاقة محفوظة</span>${DB.facility ? ' — ' + DB.facility : ''}` +
+        `<br><span style="font-size:11px;color:#9ca3af">آخر تحديث: ${savedDate}</span>`;
+    }
+  } catch(e) {}
 }
 
 function lookupCode(code) {
@@ -254,7 +279,7 @@ function showResult(card, state) {
       <div class="row"><span class="lbl">نوع البطاقة</span><span class="val" style="color:#0d5c35">${card.cardType}</span></div>
       <div class="row"><span class="lbl">رقم الملف</span><span class="val">${card.fileNo||'—'}</span></div>
       <div class="row"><span class="lbl">تاريخ الإصدار</span><span class="val">${card.issueDate||'—'}</span></div>
-      ${card.expiryDate ? `<div class="row"><span class="lbl">تاريخ الانتهاء</span><span class="val">${card.expiryDate}</span></div>` : ''}
+      ${card.expiryDate ? `<div class="row"><span class="lbl" style="color:#92400e">تاريخ الانتهاء</span><span class="val" style="color:#92400e">${card.expiryDate}</span></div>` : ''}
     </div>`;
   } else {
     area.innerHTML = `<div class="result invalid">
